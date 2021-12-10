@@ -212,7 +212,7 @@ class RealTimePlotter:
                 c = self.curves_red.pop(0)
                 self.plt.removeItem(c)
             while len(self.curves_ir) > self.maxChunks:
-                c = self.curve_ir.pop(0)
+                c = self.curves_ir.pop(0)
                 self.plt.removeItem(c)
 
         else:
