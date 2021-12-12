@@ -39,8 +39,9 @@ class PortScanner:
 
             # WINDOWS
             if platform.system() == "Windows":
-                # TODO Implement Windows Auto Connect
-                pass
+                if "CP210" in port.description:
+                    print("ESP 32 Detected at {}.".format(port.device))
+                    return port.device
 
         print('No Serial device found!')
         sys.exit()
@@ -95,12 +96,14 @@ class SerialConnection:
 
 
 class RealTimePlotter:
-    def __init__(self, app, serial_conn: serial.Serial, csv_writer: CSVWriter, chunk_size: int = 100, max_chunks=20):
+    def __init__(self, app, serial_conn: serial.Serial, csv_writer: CSVWriter, chunk_size: int = 100, max_chunks=20,
+                 print_data: bool = False):
         """
         TODO Write Annotation
         :param serial_conn: Instance of the (PySerial) Serial Connection
         :param chunk_size:
         :param max_chunks:
+        :param print_data: Boolean - Decide if the serial data is printed to the terminal
         """
 
         # Serial Connection
@@ -109,15 +112,16 @@ class RealTimePlotter:
         # CSV Writer instance
         self.csv_writer = csv_writer
 
-        # FIXME Not sure if this has to be here
+        self.print_data = print_data
+
         # Initialize plot window
-        self.app = QtGui.QApplication([])
-        # self.app = app
+        self.app = app
 
         # Plot window configuration
         self.plt = pg.plot()
-        self.plt.setWindowTitle('Live Plot from Serial')
+        self.plt.setWindowTitle('Live Plot from {}'.format(self.ser.name))
         self.plt.setInteractive(True)
+
         # setting plot window background color to white
         self.plt.setBackground('w')
         self.plt.showGrid(x=True, y=True, alpha=0.3)
@@ -131,7 +135,6 @@ class RealTimePlotter:
         self.maxChunks = max_chunks
 
         self.startTime = time.perf_counter()
-        # self.startTime = pg.ptime.time() # FIXME This is deprecated and will be removed soon
         self.ptr = 0
 
         # TODO Ask what is in this 
@@ -141,23 +144,19 @@ class RealTimePlotter:
         self.curves_red = []
         self.curves_ir = []
 
-        # curve1 = p.plot(pen=(255, 0, 0), name="Red millis curve")
         self.curve_red = self.plt.plot(pen=(0, 255, 0), name="Green sensor_red curve")
         self.curve_ir = self.plt.plot(pen=(0, 0, 255), name="Blue sensor_ir curve")
 
-        # FIXME Should this be really here or in the main()
         # Start the Real Time plotting itself
         timer = QtCore.QTimer()
         timer.timeout.connect(self.update)
         timer.start(0)
 
-    def update(self):
-        # TODO Make the variables class attributes
-
-        # TODO READ THE DATA and FILTER invalid data
-        # TODO Refactor this in a separate method
+    def __read_data(self):
+        """
+        :return: Read the serial data from the connection and return it.
+        """
         get_data = self.ser.readline().decode()
-        print('get_data= ' + get_data)
         data = get_data.split(',')
 
         # Filter all non digit characters from the serial reading
@@ -175,10 +174,22 @@ class RealTimePlotter:
             millis = sensor_red = sensor_ir = -1
             print(e)
             print(data)
-        # TODO REFACTOR EVERYTHING ABOVE
-        print('Millis={}\t Red={}\t IR={}'.format(millis, sensor_red, sensor_ir))
+
+        if self.print_data:
+            print('Millis={}\t Red={}\t IR={}'.format(millis, sensor_red, sensor_ir))
+
+        return millis, sensor_red, sensor_ir
+
+    def update(self):
+        # TODO Make the variables class attributes
+
+        # TODO READ THE DATA and FILTER invalid data
+        # TODO Refactor this in a separate method
 
         # Append the current data to the csv
+
+        millis, sensor_red, sensor_ir = self.__read_data()
+
         self.csv_writer.write_row([millis, sensor_red, sensor_ir])
 
         now = time.perf_counter()
@@ -253,9 +264,8 @@ def main():
 
     # Create GUI Application
 
-    # app = QtGui.QApplication([])
-    # rtp = RealTimePlotter(app=app, serial_conn=ser, csv_writer=csv_writer)
-    rtp = RealTimePlotter(app=None, serial_conn=ser, csv_writer=csv_writer)
+    app = QtGui.QApplication([])
+    rtp = RealTimePlotter(app=app, serial_conn=ser, csv_writer=csv_writer)
 
     timer = QtCore.QTimer()
     timer.timeout.connect(rtp.update)
